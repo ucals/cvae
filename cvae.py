@@ -2,24 +2,20 @@ import pyro
 import pyro.distributions as dist
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
-class PriorNet(nn.Module):
-    def __init__(self, x_dim, z_dim, hidden_1, hidden_2):
+class Encoder(nn.Module):
+    def __init__(self, z_dim, hidden_1, hidden_2):
         super().__init__()
-        # setup the three linear transformations used
-        self.fc1 = nn.Linear(x_dim, hidden_1)
+        self.fc1 = nn.Linear(784, hidden_1)
         self.fc2 = nn.Linear(hidden_1, hidden_2)
         self.fc31 = nn.Linear(hidden_2, z_dim)
         self.fc32 = nn.Linear(hidden_2, z_dim)
-        # setup the non-linearities
         self.relu = nn.ReLU()
 
-    def forward(self, x):
-        # define the forward computation on the image x
-        # first shape the mini-batch to have pixels in the rightmost dimension
-        x = x.reshape(-1, 784)
+    def forward(self, x, y):
+        # put x and y together in the same image for simplification
+        x[x == -1] = y[x == -1]
         # then compute the hidden units
         hidden = self.relu(self.fc1(x))
         hidden = self.relu(self.fc2(hidden))
@@ -30,50 +26,50 @@ class PriorNet(nn.Module):
         return z_loc, z_scale
 
 
-class GenerationNet(nn.Module):
+class Decoder(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2):
         super().__init__()
-        # setup the three linear transformations used
         self.fc1 = nn.Linear(z_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_1, hidden_2)
         self.fc3 = nn.Linear(hidden_2, 784)
-        # setup the non-linearities
         self.relu = nn.ReLU()
 
     def forward(self, z):
-        # then compute the hidden units
         y = self.relu(self.fc1(z))
         y = self.relu(self.fc2(y))
         y = self.fc3(y)
         return y
 
 
-class RecognitionNet(nn.Module):
-    def __init__(self, z_dim, hidden_1, hidden_2):
-        super().__init__()
-
-
 class CVAE(nn.Module):
-    def __init__(self):
+    def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
         super().__init__()
-        self.prior_net = PriorNet(200, 1000, 1000)
-        self.generation_net = GenerationNet(200, 1000, 1000)
-        self.recognition_net = MLP(200, 1000, 1000)
+        self.baseline_net = pre_trained_baseline_net
+        self.prior_net = Encoder(z_dim, hidden_1, hidden_2)
+        self.generation_net = Decoder(z_dim, hidden_1, hidden_2)
+        self.recognition_net = Encoder(z_dim, hidden_1, hidden_2)
 
     def model(self, xs, ys=None):
         # register this pytorch module and all of its sub-modules with pyro
-        pyro.module("ss_vae", self)
+        pyro.module("generation_net", self)
         with pyro.plate("data"):
+
+            # Prior network uses the baseline predictions as initial guess.
+            # This is the generative process with recurrent connection
+            with torch.no_grad():
+                y_hat = self.baseline_net(xs).view(xs.shape)
 
             # sample the handwriting style from the prior distribution, which is
             # modulated by the input xs.
-            prior_loc, prior_scale = self.prior_net(xs)  # TODO feed y_hat
+            prior_loc, prior_scale = self.prior_net(xs, y_hat)
             zs = pyro.sample('z', dist.Normal(prior_loc, prior_scale).to_event(1))
 
             # the output y is generated from the distribution pθ(y|x, z)
             loc = self.generation_net(zs)
-            # TODO remove pixels with value -1
-            pyro.sample('y', dist.Bernoulli(loc).to_event(1), obs=ys)
+            # we will only sample in the masked image
+            masked_loc = loc[xs == -1]
+            masked_ys = ys[xs == -1] if ys is not None else None
+            pyro.sample('y', dist.Bernoulli(masked_loc).to_event(1), obs=masked_ys)
             # return the loc so we can visualize it later
             return loc
 
