@@ -2,6 +2,8 @@ import pyro
 import pyro.distributions as dist
 import torch
 import torch.nn as nn
+from baseline import BaselineNet
+from util import *
 
 
 class Encoder(nn.Module):
@@ -15,9 +17,11 @@ class Encoder(nn.Module):
 
     def forward(self, x, y):
         # put x and y together in the same image for simplification
-        x[x == -1] = y[x == -1]
+        xc = x.clone()
+        xc[x == -1] = y[x == -1]
+        xc = xc.view(-1, 784)
         # then compute the hidden units
-        hidden = self.relu(self.fc1(x))
+        hidden = self.relu(self.fc1(xc))
         hidden = self.relu(self.fc2(hidden))
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
@@ -67,7 +71,7 @@ class CVAE(nn.Module):
             # the output y is generated from the distribution pθ(y|x, z)
             loc = self.generation_net(zs)
             # we will only sample in the masked image
-            masked_loc = loc[xs == -1]
+            masked_loc = loc[(xs == -1).view(-1, 784)]
             masked_ys = ys[xs == -1] if ys is not None else None
             pyro.sample('y', dist.Bernoulli(masked_loc).to_event(1), obs=masked_ys)
             # return the loc so we can visualize it later
@@ -81,9 +85,41 @@ class CVAE(nn.Module):
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
 
+def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
+          early_stop_patience, model_path):
+
+    pre_trained_baseline_net = BaselineNet(500, 500)
+    pre_trained_baseline_net.load_state_dict(
+        torch.load('../data/models/baseline_net_q1.pth'))
+    pre_trained_baseline_net.eval()
+
+    cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
+    cvae_net.to(device)
+
+    batch = next(iter(dataloaders['train']))
+    xs = batch['input'].to(device)
+    ys = batch['output'].to(device)
+    cvae_net.guide(xs, ys)
 
 
+if __name__ == '__main__':
+    # Dataset
+    datasets, dataloaders, dataset_sizes = get_data(
+        num_quadrant_inputs=1,
+        batch_size=32
+    )
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    train(
+        device=device,
+        dataloaders=dataloaders,
+        dataset_sizes=dataset_sizes,
+        learning_rate=1e-3,
+        num_epochs=30,
+        early_stop_patience=3,
+        model_path='../data/models/cvae_net_q1.pth'
+    )
 
 
 

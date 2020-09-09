@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from torchvision.utils import make_grid
-from cvae.baseline import BaselineNet
-from cvae.mnist import *
+from baseline import BaselineNet
+from mnist import *
 
 
 def get_data(num_quadrant_inputs, batch_size):
