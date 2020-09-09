@@ -16,6 +16,9 @@ class CVAEMNIST(Dataset):
         self.original = MNIST(root, train=train, download=download)
         self.transform = transform
 
+    def __len__(self):
+        return len(self.original)
+
     def __getitem__(self, item):
         image, digit = self.original[item]
         sample = {'original': image, 'digit': digit}
@@ -33,26 +36,26 @@ class ToTensor:
         return sample
 
 
-class RemoveQuadrants:
-    def __init__(self, num, mask_with=-1):
-        if num <= 0 or num >= 4:
-            raise ValueError('Number of quadrants to remove must be 1, 2 or 3')
-        self.num = num
+class MaskImages:
+    def __init__(self, num_quadrant_inputs, mask_with=-1):
+        if num_quadrant_inputs <= 0 or num_quadrant_inputs >= 4:
+            raise ValueError('Number of quadrants as inputs must be 1, 2 or 3')
+        self.num = num_quadrant_inputs
         self.mask_with = mask_with
 
     def __call__(self, sample):
         tensor = sample['original'].squeeze()
-        inp = tensor.detach().clone()
+        out = tensor.detach().clone()
         h, w = tensor.shape
 
-        inp[h // 2:, :w // 2] = self.mask_with
+        out[h // 2:, :w // 2] = self.mask_with
         if self.num == 2:
-            inp[:, :w // 2] = self.mask_with
+            out[:, :w // 2] = self.mask_with
         if self.num == 3:
-            inp[:h // 2, :] = self.mask_with
+            out[:h // 2, :] = self.mask_with
 
-        out = tensor.clone()
-        out[inp != -1] = self.mask_with
+        inp = tensor.clone()
+        inp[out != -1] = self.mask_with
 
         sample['input'] = inp
         sample['output'] = out
