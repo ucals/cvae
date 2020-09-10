@@ -1,6 +1,6 @@
 import torch
-import cvae.baseline as baseline
-from cvae.util import get_data
+import baseline as baseline
+from util import get_data
 
 
 if __name__ == '__main__':

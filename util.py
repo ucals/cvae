@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from torchvision.utils import make_grid
 from baseline import BaselineNet
+from cvae_model import CVAE
 from mnist import *
 
 
@@ -30,7 +31,24 @@ def get_data(num_quadrant_inputs, batch_size):
     return datasets, dataloaders, dataset_sizes
 
 
-def visualize(device, dataloaders, model, num_images):
+def imshow(inp, title=None):
+    inp = inp.numpy().transpose((1, 2, 0))
+    plt.imshow(inp)
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.001)  # pause a bit so that plots are updated
+
+
+def visualize():
+    model = BaselineNet(500, 500)
+    model.load_state_dict(torch.load('../data/models/baseline_net_q1.pth'))
+    model.eval()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    datasets, dataloaders, dataset_sizes = get_data(
+        num_quadrant_inputs=1,
+        batch_size=32
+    )
+    num_images = 10
     batch = next(iter(dataloaders['val']))
     inputs = batch['input'].to(device)
     outputs = batch['output'].to(device)
@@ -56,28 +74,28 @@ def visualize(device, dataloaders, model, num_images):
     imshow(grid_tensor)
 
 
-def imshow(inp, title=None):
-    inp = inp.numpy().transpose((1, 2, 0))
-    plt.imshow(inp)
-    if title is not None:
-        plt.title(title)
-    plt.pause(0.001)  # pause a bit so that plots are updated
-
-
 if __name__ == '__main__':
-    model = BaselineNet(500, 500)
-    model.load_state_dict(torch.load('../data/models/baseline_net_q1.pth'))
-    model.eval()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    datasets, dataloaders, dataset_sizes = get_data(
-        num_quadrant_inputs=1,
-        batch_size=32
-    )
-
-    visualize(device, dataloaders, model, 10)
-
-
+    visualize()
+    # pre_trained_baseline_net = BaselineNet(500, 500)
+    # pre_trained_baseline_net.load_state_dict(
+    #     torch.load('../data/models/baseline_net_q1.pth'))
+    # pre_trained_baseline_net.eval()
+    #
+    # model = CVAE(200, 500, 500, pre_trained_baseline_net)
+    # model.load('../data/models/cvae_net_q1')
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # datasets, dataloaders, dataset_sizes = get_data(
+    #     num_quadrant_inputs=1,
+    #     batch_size=32
+    # )
+    #
+    # batch = next(iter(dataloaders['val']))
+    # inputs = batch['input'].to(device)
+    # outputs = batch['output'].to(device)
+    # originals = batch['original'].to(device)
+    #
+    # preds = model.predict(inputs, num_samples=10)
+    # print(preds)
 
 
 

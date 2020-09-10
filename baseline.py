@@ -24,7 +24,7 @@ class BaselineNet(nn.Module):
 
 
 class MaskedBCELoss(nn.Module):
-    def __init__(self, reduction='mean', masked_with=-1):
+    def __init__(self, reduction='sum', masked_with=-1):
         super().__init__()
         self.reduction = reduction
         self.masked_with = masked_with
