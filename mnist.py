@@ -6,8 +6,9 @@
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets import MNIST
+from torchvision.transforms import Compose
 import torchvision.transforms.functional as F
 
 
@@ -60,3 +61,27 @@ class MaskImages:
         sample['input'] = inp
         sample['output'] = out
         return sample
+
+
+def get_data(num_quadrant_inputs, batch_size):
+    transforms = Compose([
+        ToTensor(),
+        MaskImages(num_quadrant_inputs=num_quadrant_inputs)
+    ])
+    datasets, dataloaders, dataset_sizes = {}, {}, {}
+    for mode in ['train', 'val']:
+        datasets[mode] = CVAEMNIST(
+            '../data',
+            download=True,
+            transform=transforms,
+            train=mode == 'train'
+        )
+        dataloaders[mode] = DataLoader(
+            datasets[mode],
+            batch_size=batch_size,
+            shuffle=mode == 'train',
+            num_workers=0
+        )
+        dataset_sizes[mode] = len(datasets[mode])
+
+    return datasets, dataloaders, dataset_sizes

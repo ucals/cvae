@@ -7,7 +7,7 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from baseline import BaselineNet
-# from util import get_data
+from mnist import get_data
 
 
 class Encoder(nn.Module):

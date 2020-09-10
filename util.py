@@ -1,34 +1,8 @@
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
-from torchvision.transforms import Compose
 from torchvision.utils import make_grid
 from baseline import BaselineNet
 from cvae_model import CVAE
 from mnist import *
-
-
-def get_data(num_quadrant_inputs, batch_size):
-    transforms = Compose([
-        ToTensor(),
-        MaskImages(num_quadrant_inputs=num_quadrant_inputs)
-    ])
-    datasets, dataloaders, dataset_sizes = {}, {}, {}
-    for mode in ['train', 'val']:
-        datasets[mode] = CVAEMNIST(
-            '../data',
-            download=True,
-            transform=transforms,
-            train=mode == 'train'
-        )
-        dataloaders[mode] = DataLoader(
-            datasets[mode],
-            batch_size=batch_size,
-            shuffle=mode == 'train',
-            num_workers=0
-        )
-        dataset_sizes[mode] = len(datasets[mode])
-
-    return datasets, dataloaders, dataset_sizes
 
 
 def imshow(inp, title=None):
