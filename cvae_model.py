@@ -126,6 +126,10 @@ class CVAE(nn.Module):
         self.recognition_net.load_state_dict(
             torch.load(parent / f'{stem}_recognition.pth'))
 
+        self.prior_net.eval()
+        self.generation_net.eval()
+        self.recognition_net.eval()
+
 
 def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
           early_stop_patience, model_path):
