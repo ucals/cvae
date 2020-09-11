@@ -60,12 +60,13 @@ class CVAE(nn.Module):
     def model(self, xs, ys=None):
         # register this pytorch module and all of its sub-modules with pyro
         pyro.module("generation_net", self)
+        batch_size = xs.shape[0]
         with pyro.plate("data"):
 
             # Prior network uses the baseline predictions as initial guess.
             # This is the generative process with recurrent connection
-            with torch.no_grad():
-                y_hat = self.baseline_net(xs).view(xs.shape)
+            # with torch.no_grad():
+            y_hat = self.baseline_net(xs).view(xs.shape)
 
             # sample the handwriting style from the prior distribution, which is
             # modulated by the input xs.
@@ -74,37 +75,33 @@ class CVAE(nn.Module):
 
             # the output y is generated from the distribution pθ(y|x, z)
             loc = self.generation_net(zs)
-            # we will only sample in the masked image
-            mask_loc = loc[(xs == -1).view(-1, 784)]
-            mask_ys = ys[xs == -1] if ys is not None else None
-            pyro.sample('y', dist.Bernoulli(mask_loc).to_event(1), obs=mask_ys)
+
+            if ys is not None:
+                # in training, we will only sample in the masked image
+                mask_loc = loc[(xs == -1).view(-1, 784)].view(batch_size, -1)
+                mask_ys = ys[xs == -1].view(batch_size, -1)
+                pyro.sample('y', dist.Bernoulli(mask_loc).to_event(1), obs=mask_ys)
+            else:
+                # in testing, sample in the whole image
+                # pyro.sample('y', dist.Bernoulli(loc).to_event(1), obs=None)
+                pyro.deterministic('y', loc.detach())
+
             # return the loc so we can visualize it later
             return loc
 
     def guide(self, xs, ys=None):
         with pyro.plate("data"):
-            # sample (and score) the latent handwriting-style with the
-            # variational distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
-            loc, scale = self.recognition_net(xs, ys)
+            if ys is None:
+                # at inference time, ys is not provided. In that case,
+                # the model uses the prior network
+                y_hat = self.baseline_net(xs).view(xs.shape)
+                loc, scale = self.prior_net(xs, y_hat)
+            else:
+                # at training time, uses the variational distribution
+                # q(z|x,y) = normal(loc(x,y),scale(x,y))
+                loc, scale = self.recognition_net(xs, ys)
+
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
-
-    def predict(self, xs, num_samples=1):
-        # evaluate initial guess
-        with torch.no_grad():
-            y_hat = self.baseline_net(xs).view(xs.shape)
-        prior_loc, prior_scale = self.prior_net(xs, y_hat)
-
-        yss = []
-        for i in range(num_samples):
-            # sample in latent space
-            zs = dist.Normal(prior_loc, prior_scale).sample()
-            # the output y is generated from the distribution pθ(y|x, z)
-            with torch.no_grad():
-                ys = self.generation_net(zs).view(xs.shape)
-            yss.append(ys)
-
-        yss = torch.stack(yss, dim=0)
-        return yss
 
     def save(self, model_path):
         parent = Path(model_path).parent
@@ -120,24 +117,32 @@ class CVAE(nn.Module):
         parent = Path(model_path).parent
         stem = Path(model_path).stem
         self.prior_net.load_state_dict(
-            torch.load(parent / f'{stem}_prior.pth'))
+            torch.load(parent / f'{stem}_prior.pth',
+                       map_location=torch.device('cpu')))
         self.generation_net.load_state_dict(
-            torch.load(parent / f'{stem}_generation.pth'))
+            torch.load(parent / f'{stem}_generation.pth',
+                       map_location=torch.device('cpu')))
         self.recognition_net.load_state_dict(
-            torch.load(parent / f'{stem}_recognition.pth'))
+            torch.load(parent / f'{stem}_recognition.pth',
+                       map_location=torch.device('cpu')))
 
         self.prior_net.eval()
         self.generation_net.eval()
         self.recognition_net.eval()
 
+    def to_(self, device):
+        self.baseline_net.to(device)
+        self.prior_net.to(device)
+        self.generation_net.to(device)
+        self.recognition_net.to(device)
+        self.to(device)
+
 
 def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
-          early_stop_patience, model_path):
+          early_stop_patience, model_path, pre_trained_baseline_net):
 
-    pre_trained_baseline_net = BaselineNet(500, 500)
-    pre_trained_baseline_net.load_state_dict(
-        torch.load('../data/models/baseline_net_q1.pth'))
-    pre_trained_baseline_net.eval()
+    # clear param store
+    pyro.clear_param_store()
 
     cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
     cvae_net.to(device)
@@ -155,7 +160,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
 
             # Iterate over data.
             bar = tqdm(dataloaders[phase], desc=f'Epoch {epoch} {phase}'.ljust(20))
-            for batch in bar:
+            for i, batch in enumerate(bar):
                 inputs = batch['input'].to(device)
                 outputs = batch['output'].to(device)
 
@@ -167,8 +172,9 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
                 # statistics
                 running_loss += loss / inputs.size(0)
                 num_preds += 1
-                bar.set_postfix(loss=f'{running_loss / num_preds:.2f}',
-                                early_stop_count=early_stop_count)
+                if i % 10 == 0:
+                    bar.set_postfix(loss=f'{running_loss / num_preds:.2f}',
+                                    early_stop_count=early_stop_count)
 
             # epoch_loss = running_loss / dataset_sizes[phase]
             # TODO add early stopping
@@ -188,6 +194,11 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    baseline_net = BaselineNet(500, 500)
+    baseline_net.load_state_dict(
+        torch.load('../data/models/baseline_net_q1.pth'))
+    baseline_net.eval()
+
     train(
         device=device,
         dataloaders=dataloaders,
@@ -195,7 +206,8 @@ if __name__ == '__main__':
         learning_rate=1e-3,
         num_epochs=30,
         early_stop_patience=3,
-        model_path='../data/models/cvae_net_q1.pth'
+        model_path='../data/models/cvae_net_q1.pth',
+        pre_trained_baseline_net=baseline_net
     )
 
 

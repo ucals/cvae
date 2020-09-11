@@ -8,8 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets import MNIST
-from torchvision.transforms import Compose
-import torchvision.transforms.functional as F
+from torchvision.transforms import Compose, functional
 
 
 class CVAEMNIST(Dataset):
@@ -31,7 +30,7 @@ class CVAEMNIST(Dataset):
 
 class ToTensor:
     def __call__(self, sample):
-        sample['original'] = F.to_tensor(sample['original'])
+        sample['original'] = functional.to_tensor(sample['original'])
         sample['digit'] = torch.as_tensor(np.asarray(sample['digit']),
                                           dtype=torch.int64)
         return sample

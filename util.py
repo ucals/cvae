@@ -1,6 +1,10 @@
 import matplotlib.pyplot as plt
+import pandas as pd
+import pyro
+from pyro.infer import Predictive, SVI, Trace_ELBO
 from torchvision.utils import make_grid
-from baseline import BaselineNet
+from tqdm import tqdm
+from baseline import BaselineNet, MaskedBCELoss
 from cvae_model import CVAE
 from mnist import *
 
@@ -26,7 +30,8 @@ def visualize(num_images, num_samples):
     # Load models pre-trained models
     pre_trained_baseline = BaselineNet(500, 500)
     pre_trained_baseline.load_state_dict(
-        torch.load('../data/models/baseline_net_q1.pth'))
+        torch.load('../data/models/baseline_net_q1.pth',
+                   map_location=torch.device('cpu')))
     pre_trained_baseline.eval()
 
     pre_trained_cvae = CVAE(200, 500, 500, pre_trained_baseline)
@@ -46,7 +51,11 @@ def visualize(num_images, num_samples):
     # Make predictions
     with torch.no_grad():
         baseline_preds = pre_trained_baseline(inputs).view(outputs.shape)
-        cvae_preds = pre_trained_cvae.predict(inputs, num_samples=num_samples)
+
+    predictive = Predictive(pre_trained_cvae.model,
+                            guide=pre_trained_cvae.guide,
+                            num_samples=num_samples)
+    cvae_preds = predictive(inputs)['y'].view(num_samples, num_images, 28, 28)
 
     # Predictions are only made in the pixels not masked. This completes
     # the input quadrant with the prediction for the missing quadrants, for
@@ -84,8 +93,59 @@ def visualize(num_images, num_samples):
     imshow(grid_tensor)
 
 
+def generate_table():
+    # Load models pre-trained models
+    pre_trained_baseline = BaselineNet(500, 500)
+    pre_trained_baseline.load_state_dict(
+        torch.load('../data/models/baseline_net_q1.pth',
+                   map_location=torch.device('cpu')))
+    pre_trained_baseline.eval()
+
+    pre_trained_cvae = CVAE(200, 500, 500, pre_trained_baseline)
+    pre_trained_cvae.load('../data/models/cvae_net_q1')
+
+    # Load sample data
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    datasets, dataloaders, dataset_sizes = get_data(
+        num_quadrant_inputs=1,
+        batch_size=32
+    )
+    criterion = MaskedBCELoss(reduction='sum')
+
+    baseline_cll = 0.0
+    cvae_mc_cll = 0.0
+    num_preds = 0
+
+    df = pd.DataFrame(index=['NN (baseline)', 'CVAE (Monte Carlo)'],
+                      columns=['1 quadrant'])
+
+    # Iterate over data.
+    bar = tqdm(dataloaders['val'])
+    for batch in bar:
+        inputs = batch['input'].to(device)
+        outputs = batch['output'].to(device)
+        num_preds += 1
+
+        with torch.no_grad():
+            preds = pre_trained_baseline(inputs)
+        baseline_cll += criterion(preds, outputs) / inputs.size(0)
+
+        predictive = Predictive(pre_trained_cvae.model,
+                                guide=pre_trained_cvae.guide,
+                                num_samples=10)
+        preds = predictive(inputs)['y'].view(10, inputs.size(0), 28, 28).mean(dim=0)
+
+        cvae_mc_cll += criterion(preds, outputs) / inputs.size(0)
+        # print(cvae_mc_cll)
+
+    df.iloc[0, 0] = baseline_cll.item() / num_preds
+    df.iloc[1, 0] = cvae_mc_cll.item() / num_preds
+    print(df)
+
+
 if __name__ == '__main__':
     visualize(num_images=10, num_samples=10)
+    # generate_table()
 
 
 

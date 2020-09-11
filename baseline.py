@@ -65,7 +65,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
 
             # Iterate over data.
             bar = tqdm(dataloaders[phase], desc=f'Epoch {epoch} {phase}'.ljust(20))
-            for batch in bar:
+            for i, batch in enumerate(bar):
                 inputs = batch['input'].to(device)
                 outputs = batch['output'].to(device)
 
@@ -86,8 +86,9 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
                 # statistics
                 running_loss += loss.item()
                 num_preds += 1
-                bar.set_postfix(loss=f'{running_loss / num_preds:.2f}',
-                                early_stop_count=early_stop_count)
+                if i % 10 == 0:
+                    bar.set_postfix(loss=f'{running_loss / num_preds:.2f}',
+                                    early_stop_count=early_stop_count)
 
             epoch_loss = running_loss / dataset_sizes[phase]
             # deep copy the model
