@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from pathlib import Path
 from pyro.infer import Predictive, Trace_ELBO
 from torchvision.utils import make_grid
 from tqdm import tqdm
@@ -8,26 +9,31 @@ from cvae_model import CVAE
 from mnist import *
 
 
-def imshow(inp, title=None):
-    inp = inp.numpy().transpose((1, 2, 0))
+def imshow(inp, image_path=None):
+    inp = inp.cpu().numpy().transpose((1, 2, 0))
     space = np.ones((inp.shape[0], 50, inp.shape[2]))
     inp = np.concatenate([space, inp], axis=1)
 
-    plt.imshow(inp)
-    plt.text(0, 23, 'Inputs:')
-    plt.text(0, 23 + 28 + 3, 'Truth:')
-    plt.text(0, 23 + (28 + 3) * 2, 'NN:')
-    plt.text(0, 23 + (28 + 3) * 3, 'CVAE:')
-    plt.axis('off')
+    ax = plt.axes(frameon=False, xticks=[], yticks=[])
+    ax.text(0, 23, 'Inputs:')
+    ax.text(0, 23 + 28 + 3, 'Truth:')
+    ax.text(0, 23 + (28 + 3) * 2, 'NN:')
+    ax.text(0, 23 + (28 + 3) * 3, 'CVAE:')
+    ax.imshow(inp)
 
-    if title is not None:
-        plt.title(title)
-    plt.pause(0.001)  # pause a bit so that plots are updated
+    if image_path is not None:
+        Path(image_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(image_path, bbox_inches='tight', pad_inches=0.1)
+    else:
+        plt.show()
+
+    plt.clf()
 
 
-def visualize(pre_trained_baseline, pre_trained_cvae, num_images, num_samples):
-    # Load sample data
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+def visualize(device, pre_trained_baseline, pre_trained_cvae, num_images,
+              num_samples, image_path=None):
+
+    # Load sample random data
     datasets, _, dataset_sizes = get_data(
         num_quadrant_inputs=1,
         batch_size=num_images
@@ -64,7 +70,7 @@ def visualize(pre_trained_baseline, pre_trained_cvae, num_images, num_samples):
     # make grids
     inputs_tensor = make_grid(inputs, nrow=num_images, padding=0)
     originals_tensor = make_grid(originals, nrow=num_images, padding=0)
-    separator_tensor = torch.ones((3, 5, originals_tensor.shape[-1]))
+    separator_tensor = torch.ones((3, 5, originals_tensor.shape[-1])).to(device)
     baseline_tensor = make_grid(baseline_preds, nrow=num_images, padding=0)
     cvae_tensor = make_grid(cvae_preds, nrow=num_images, padding=0)
 
@@ -81,18 +87,15 @@ def visualize(pre_trained_baseline, pre_trained_cvae, num_images, num_samples):
                              separator_tensor, baseline_tensor,
                              separator_tensor, cvae_tensor], dim=1)
     # plot tensors
-    imshow(grid_tensor)
+    imshow(grid_tensor, image_path=image_path)
 
 
-def generate_table(pre_trained_baseline, pre_trained_cvae, col_name):
+def generate_table(device, dataloaders, pre_trained_baseline,
+                   pre_trained_cvae, num_particles, col_name):
+
     # Load sample data
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    datasets, dataloaders, dataset_sizes = get_data(
-        num_quadrant_inputs=1,
-        batch_size=32
-    )
     criterion = MaskedBCELoss(reduction='sum')
-    loss_fn = Trace_ELBO(num_particles=100).differentiable_loss
+    loss_fn = Trace_ELBO(num_particles=num_particles).differentiable_loss
 
     baseline_cll = 0.0
     cvae_mc_cll = 0.0
@@ -102,7 +105,7 @@ def generate_table(pre_trained_baseline, pre_trained_cvae, col_name):
                       columns=[col_name])
 
     # Iterate over data.
-    bar = tqdm(dataloaders['val'])
+    bar = tqdm(dataloaders['val'], desc='Generating predictions'.ljust(20))
     for batch in bar:
         inputs = batch['input'].to(device)
         outputs = batch['output'].to(device)
@@ -144,6 +147,7 @@ if __name__ == '__main__':
     df = generate_table(
         pre_trained_baseline,
         pre_trained_cvae,
+        num_particles=10,
         col_name='1 quadrant'
     )
     print(df)
