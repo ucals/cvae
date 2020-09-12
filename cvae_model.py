@@ -108,28 +108,20 @@ class CVAE(nn.Module):
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
     def save(self, model_path):
-        parent = Path(model_path).parent
-        stem = Path(model_path).stem
-        torch.save(self.prior_net.state_dict(),
-                   parent / f'{stem}_prior.pth')
-        torch.save(self.generation_net.state_dict(),
-                   parent / f'{stem}_generation.pth')
-        torch.save(self.recognition_net.state_dict(),
-                   parent / f'{stem}_recognition.pth')
+        torch.save({
+            'baseline': self.baseline_net.state_dict(),
+            'prior': self.prior_net.state_dict(),
+            'generation': self.generation_net.state_dict(),
+            'recognition': self.recognition_net.state_dict()
+        }, model_path)
 
     def load(self, model_path, map_location=None):
-        parent = Path(model_path).parent
-        stem = Path(model_path).stem
-        self.prior_net.load_state_dict(
-            torch.load(parent / f'{stem}_prior.pth',
-                       map_location=map_location))
-        self.generation_net.load_state_dict(
-            torch.load(parent / f'{stem}_generation.pth',
-                       map_location=map_location))
-        self.recognition_net.load_state_dict(
-            torch.load(parent / f'{stem}_recognition.pth',
-                       map_location=map_location))
-
+        net_weights = torch.load(model_path, map_location=map_location)
+        self.baseline_net.load_state_dict(net_weights['baseline'])
+        self.prior_net.load_state_dict(net_weights['prior'])
+        self.generation_net.load_state_dict(net_weights['generation'])
+        self.recognition_net.load_state_dict(net_weights['recognition'])
+        self.baseline_net.eval()
         self.prior_net.eval()
         self.generation_net.eval()
         self.recognition_net.eval()
