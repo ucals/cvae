@@ -3,11 +3,9 @@ from pathlib import Path
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
-from tqdm import tqdm
 import torch
 import torch.nn as nn
-from baseline import BaselineNet
-from mnist import get_data
+from tqdm import tqdm
 
 
 class Encoder(nn.Module):
@@ -52,6 +50,11 @@ class Decoder(nn.Module):
 class CVAE(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
         super().__init__()
+        # The CVAE is composed of multiple MLPs, such as recognition network
+        # qφ(z|x, y), (conditional) prior network pθ(z|x), and generation
+        # network pθ(y|x, z). Also, CVAE is built on top of the NN: not only
+        # the direct input x, but also the initial guess y_hat made by the NN
+        # are fed into the prior network.
         self.baseline_net = pre_trained_baseline_net
         self.prior_net = Encoder(z_dim, hidden_1, hidden_2)
         self.generation_net = Decoder(z_dim, hidden_1, hidden_2)
@@ -65,7 +68,6 @@ class CVAE(nn.Module):
 
             # Prior network uses the baseline predictions as initial guess.
             # This is the generative process with recurrent connection
-            # with torch.no_grad():
             y_hat = self.baseline_net(xs).view(xs.shape)
 
             # sample the handwriting style from the prior distribution, which is
@@ -77,13 +79,15 @@ class CVAE(nn.Module):
             loc = self.generation_net(zs)
 
             if ys is not None:
-                # in training, we will only sample in the masked image
+                # In training, we will only sample in the masked image
                 mask_loc = loc[(xs == -1).view(-1, 784)].view(batch_size, -1)
                 mask_ys = ys[xs == -1].view(batch_size, -1)
                 pyro.sample('y', dist.Bernoulli(mask_loc).to_event(1), obs=mask_ys)
             else:
-                # in testing, sample in the whole image
-                # pyro.sample('y', dist.Bernoulli(loc).to_event(1), obs=None)
+                # In testing, no need to sample: the output is already a
+                # probability in [0, 1] range, which better represent pixel
+                # values considering grayscale. If we sample, we will force
+                # each pixel to be  either 0 or 1, killing the grayscale
                 pyro.deterministic('y', loc.detach())
 
             # return the loc so we can visualize it later
@@ -113,29 +117,22 @@ class CVAE(nn.Module):
         torch.save(self.recognition_net.state_dict(),
                    parent / f'{stem}_recognition.pth')
 
-    def load(self, model_path):
+    def load(self, model_path, map_location=None):
         parent = Path(model_path).parent
         stem = Path(model_path).stem
         self.prior_net.load_state_dict(
             torch.load(parent / f'{stem}_prior.pth',
-                       map_location=torch.device('cpu')))
+                       map_location=map_location))
         self.generation_net.load_state_dict(
             torch.load(parent / f'{stem}_generation.pth',
-                       map_location=torch.device('cpu')))
+                       map_location=map_location))
         self.recognition_net.load_state_dict(
             torch.load(parent / f'{stem}_recognition.pth',
-                       map_location=torch.device('cpu')))
+                       map_location=map_location))
 
         self.prior_net.eval()
         self.generation_net.eval()
         self.recognition_net.eval()
-
-    def to_(self, device):
-        self.baseline_net.to(device)
-        self.prior_net.to(device)
-        self.generation_net.to(device)
-        self.recognition_net.to(device)
-        self.to(device)
 
 
 def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
@@ -151,6 +148,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
 
     best_loss = np.inf
     early_stop_count = 0
+    Path(model_path).parent.mkdir(parents=True, exist_ok=True)
 
     for epoch in range(num_epochs):
         # Each epoch has a training and validation phase
@@ -176,40 +174,22 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
                     bar.set_postfix(loss=f'{running_loss / num_preds:.2f}',
                                     early_stop_count=early_stop_count)
 
-            # epoch_loss = running_loss / dataset_sizes[phase]
-            # TODO add early stopping
+            epoch_loss = running_loss / dataset_sizes[phase]
+            # deep copy the model
+            if phase == 'val':
+                if epoch_loss < best_loss:
+                    best_loss = epoch_loss
+                    cvae_net.save(model_path)
+                    early_stop_count = 0
+                else:
+                    early_stop_count += 1
+
+        if early_stop_count >= early_stop_patience:
+            break
 
     # Save model weights
-    Path(model_path).parent.mkdir(parents=True, exist_ok=True)
-    cvae_net.save(model_path)
+    cvae_net.load(model_path)
     return cvae_net
-
-
-if __name__ == '__main__':
-    # Dataset
-    datasets, dataloaders, dataset_sizes = get_data(
-        num_quadrant_inputs=1,
-        batch_size=32
-    )
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    baseline_net = BaselineNet(500, 500)
-    baseline_net.load_state_dict(
-        torch.load('../data/models/baseline_net_q1.pth'))
-    baseline_net.eval()
-
-    train(
-        device=device,
-        dataloaders=dataloaders,
-        dataset_sizes=dataset_sizes,
-        learning_rate=1e-3,
-        num_epochs=30,
-        early_stop_patience=3,
-        model_path='../data/models/cvae_net_q1.pth',
-        pre_trained_baseline_net=baseline_net
-    )
-
 
 
 

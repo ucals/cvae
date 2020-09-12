@@ -20,5 +20,5 @@ if __name__ == '__main__':
         learning_rate=1e-3,
         num_epochs=30,
         early_stop_patience=3,
-        model_path='../data/models/baseline_net_q1.pth'
+        model_path='../data/models/gpu/baseline_net_q1.pth'
     )
