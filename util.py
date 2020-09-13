@@ -30,12 +30,12 @@ def imshow(inp, image_path=None):
     plt.clf()
 
 
-def visualize(device, pre_trained_baseline, pre_trained_cvae, num_images,
-              num_samples, image_path=None):
+def visualize(device, num_quadrant_inputs, pre_trained_baseline,
+              pre_trained_cvae, num_images, num_samples, image_path=None):
 
     # Load sample random data
     datasets, _, dataset_sizes = get_data(
-        num_quadrant_inputs=1,
+        num_quadrant_inputs=num_quadrant_inputs,
         batch_size=num_images
     )
     dataloader = DataLoader(datasets['val'], batch_size=num_images, shuffle=True)
@@ -90,8 +90,14 @@ def visualize(device, pre_trained_baseline, pre_trained_cvae, num_images,
     imshow(grid_tensor, image_path=image_path)
 
 
-def generate_table(device, dataloaders, pre_trained_baseline,
+def generate_table(device, num_quadrant_inputs, pre_trained_baseline,
                    pre_trained_cvae, num_particles, col_name):
+
+    # Load sample random data
+    datasets, dataloaders, dataset_sizes = get_data(
+        num_quadrant_inputs=num_quadrant_inputs,
+        batch_size=32
+    )
 
     # Load sample data
     criterion = MaskedBCELoss(reduction='sum')
@@ -128,6 +134,8 @@ def generate_table(device, dataloaders, pre_trained_baseline,
 
 if __name__ == '__main__':
     # Load models pre-trained models
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     pre_trained_baseline = BaselineNet(500, 500)
     pre_trained_baseline.load_state_dict(
         torch.load('../data/models/baseline_net_q1.pth',
@@ -135,18 +143,22 @@ if __name__ == '__main__':
     pre_trained_baseline.eval()
 
     pre_trained_cvae = CVAE(200, 500, 500, pre_trained_baseline)
-    pre_trained_cvae.load('../data/models/cvae_net_q1')
+    pre_trained_cvae.load('../data/models/cvae_net_q1.pth', map_location=device)
 
     # visualize(
-    #     pre_trained_baseline,
-    #     pre_trained_cvae,
+    #     device=device,
+    #     num_quadrant_inputs=2,
+    #     pre_trained_baseline=pre_trained_baseline,
+    #     pre_trained_cvae=pre_trained_cvae,
     #     num_images=10,
     #     num_samples=10
     # )
 
     df = generate_table(
-        pre_trained_baseline,
-        pre_trained_cvae,
+        device,
+        num_quadrant_inputs=1,
+        pre_trained_baseline=pre_trained_baseline,
+        pre_trained_cvae=pre_trained_cvae,
         num_particles=10,
         col_name='1 quadrant'
     )

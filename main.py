@@ -7,6 +7,7 @@ from util import get_data, visualize, generate_table
 
 if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    num_epochs = 30
     results = []
 
     for num_quadrant_inputs in [1, 2, 3]:
@@ -25,7 +26,7 @@ if __name__ == '__main__':
             dataloaders=dataloaders,
             dataset_sizes=dataset_sizes,
             learning_rate=1e-3,
-            num_epochs=50,
+            num_epochs=num_epochs,
             early_stop_patience=3,
             model_path=f'baseline_net_q{num_quadrant_inputs}.pth'
         )
@@ -36,7 +37,7 @@ if __name__ == '__main__':
             dataloaders=dataloaders,
             dataset_sizes=dataset_sizes,
             learning_rate=1e-3,
-            num_epochs=100,
+            num_epochs=num_epochs,
             early_stop_patience=3,
             model_path=f'cvae_net_q{num_quadrant_inputs}.pth',
             pre_trained_baseline_net=baseline_net
@@ -44,9 +45,10 @@ if __name__ == '__main__':
 
         # Visualize conditional predictions
         visualize(
-            device,
-            baseline_net,
-            cvae_net,
+            device=device,
+            num_quadrant_inputs=num_quadrant_inputs,
+            pre_trained_baseline=baseline_net,
+            pre_trained_cvae=cvae_net,
             num_images=10,
             num_samples=10,
             image_path=f'cvae_plot_q{num_quadrant_inputs}.png'
@@ -54,8 +56,11 @@ if __name__ == '__main__':
 
         # Retrieve conditional log likelihood
         df = generate_table(
-            baseline_net,
-            cvae_net,
+            device=device,
+            num_quadrant_inputs=num_quadrant_inputs,
+            pre_trained_baseline=baseline_net,
+            pre_trained_cvae=cvae_net,
+            num_particles=10,
             col_name=f'{num_quadrant_inputs} quadrant{maybes}'
         )
         results.append(df)

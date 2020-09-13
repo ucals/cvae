@@ -109,7 +109,6 @@ class CVAE(nn.Module):
 
     def save(self, model_path):
         torch.save({
-            'baseline': self.baseline_net.state_dict(),
             'prior': self.prior_net.state_dict(),
             'generation': self.generation_net.state_dict(),
             'recognition': self.recognition_net.state_dict()
@@ -117,11 +116,9 @@ class CVAE(nn.Module):
 
     def load(self, model_path, map_location=None):
         net_weights = torch.load(model_path, map_location=map_location)
-        self.baseline_net.load_state_dict(net_weights['baseline'])
         self.prior_net.load_state_dict(net_weights['prior'])
         self.generation_net.load_state_dict(net_weights['generation'])
         self.recognition_net.load_state_dict(net_weights['recognition'])
-        self.baseline_net.eval()
         self.prior_net.eval()
         self.generation_net.eval()
         self.recognition_net.eval()
@@ -149,7 +146,8 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
             num_preds = 0
 
             # Iterate over data.
-            bar = tqdm(dataloaders[phase], desc=f'Epoch {epoch} {phase}'.ljust(20))
+            bar = tqdm(dataloaders[phase],
+                       desc=f'CVAE Epoch {epoch} {phase}'.ljust(20))
             for i, batch in enumerate(bar):
                 inputs = batch['input'].to(device)
                 outputs = batch['output'].to(device)

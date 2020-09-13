@@ -64,7 +64,8 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
             num_preds = 0
 
             # Iterate over data.
-            bar = tqdm(dataloaders[phase], desc=f'Epoch {epoch} {phase}'.ljust(20))
+            bar = tqdm(dataloaders[phase],
+                       desc=f'NN Epoch {epoch} {phase}'.ljust(20))
             for i, batch in enumerate(bar):
                 inputs = batch['input'].to(device)
                 outputs = batch['output'].to(device)
