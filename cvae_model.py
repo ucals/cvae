@@ -68,7 +68,10 @@ class CVAE(nn.Module):
 
             # Prior network uses the baseline predictions as initial guess.
             # This is the generative process with recurrent connection
-            y_hat = self.baseline_net(xs).view(xs.shape)
+            with torch.no_grad():
+                # this ensures the training process does not change the
+                # baseline network
+                y_hat = self.baseline_net(xs).view(xs.shape)
 
             # sample the handwriting style from the prior distribution, which is
             # modulated by the input xs.

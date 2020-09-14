@@ -9,6 +9,7 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     num_epochs = 30
     results = []
+    columns = []
 
     for num_quadrant_inputs in [1, 2, 3]:
         maybes = 's' if num_quadrant_inputs > 1 else ''
@@ -64,8 +65,12 @@ if __name__ == '__main__':
             col_name=f'{num_quadrant_inputs} quadrant{maybes}'
         )
         results.append(df)
+        columns.append(f'{num_quadrant_inputs} quadrant{maybes}')
 
     results = pd.concat(results, axis=1, ignore_index=True)
+    results.columns = columns
+    results.loc['Performance gap', :] = results.iloc[0, :] - results.iloc[1, :]
+
     results.to_csv('results.csv')
 
 
