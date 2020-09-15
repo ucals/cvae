@@ -169,7 +169,7 @@ Deep CGMs are trained to maximize the conditional marginal log-likelihood.
 Often the objective function is intractable, and we apply the SGVB framework to train the model. 
 The empirical lower bound is written as:
 
-$$ \tilde{\mathcal{L}}_{\text{CVAE}}(x, y; \theta, \phi) = -KL(q_{\phi}(z | x, y) || p_{\theta}(z | x)) + \frac{1}{L}\sum_{l=1}^{L}\log p_{\theta}(y | x, z^{(l)}) $$
+<img src="https://render.githubusercontent.com/render/math?math=\tilde{\mathcal{L}}_{\text{CVAE}}(x, y; \theta, \phi) = -KL(q_{\phi}(z | x, y) || p_{\theta}(z | x)) + \frac{1}{L}\sum_{l=1}^{L}\log p_{\theta}(y | x, z^{(l)})">
 
 where $\bf z^{(l)}$ is a Gaussian latent variable product, and $L$ is the number of samples (or particles in Pyro nomenclature).
 We call this model conditional variational auto-encoder (CVAE). 
