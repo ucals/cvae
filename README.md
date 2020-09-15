@@ -1,4 +1,5 @@
 # Conditional Variational Auto-encoder
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/learning-structured-output-representation/structured-prediction-on-mnist)](https://paperswithcode.com/sota/structured-prediction-on-mnist?p=learning-structured-output-representation)
 
 ## Introduction
 
