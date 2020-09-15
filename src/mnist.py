@@ -1,9 +1,3 @@
-# First step in implementing the paper is to prepare the datasets used. The
-# First dataset used is MNIST. The authors divide each digit image into four
-# quadrants, and take one, two, or three quadrant(s) as an input and the
-# remaining quadrants as an output. We will implement that using a custom
-# transformation.
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -37,6 +31,12 @@ class ToTensor:
 
 
 class MaskImages:
+    """This torchvision image transformation prepares the MNIST digits to be
+    used in the tutorial. Depending on the number of quadrants to be used as
+    inputs (1, 2, or 3), the transformation masks the remaining (3, 2, 1)
+    quadrant(s) setting their pixels with -1. Additionally, the transformation
+    adds the target output in the sample dict as the complementary of the input
+    """
     def __init__(self, num_quadrant_inputs, mask_with=-1):
         if num_quadrant_inputs <= 0 or num_quadrant_inputs >= 4:
             raise ValueError('Number of quadrants as inputs must be 1, 2 or 3')
@@ -48,12 +48,18 @@ class MaskImages:
         out = tensor.detach().clone()
         h, w = tensor.shape
 
+        # removes the bottom left quadrant from the target output
         out[h // 2:, :w // 2] = self.mask_with
+        # if num of quadrants to be used as input is 2,
+        # also removes the top left quadrant from the target output
         if self.num == 2:
             out[:, :w // 2] = self.mask_with
+        # if num of quadrants to be used as input is 3,
+        # also removes the top right quadrant from the target output
         if self.num == 3:
             out[:h // 2, :] = self.mask_with
 
+        # now, sets the input as complementary
         inp = tensor.clone()
         inp[out != -1] = self.mask_with
 

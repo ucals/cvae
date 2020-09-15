@@ -1,12 +1,14 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
 from pyro.infer import Predictive, Trace_ELBO
+import torch
+from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
-from baseline import BaselineNet, MaskedBCELoss
-from cvae_model import CVAE
-from mnist import *
+from baseline import MaskedBCELoss
+from mnist import get_data
 
 
 def imshow(inp, image_path=None):
@@ -100,7 +102,7 @@ def generate_table(device, num_quadrant_inputs, pre_trained_baseline,
     )
 
     # Load sample data
-    criterion = MaskedBCELoss(reduction='sum')
+    criterion = MaskedBCELoss()
     loss_fn = Trace_ELBO(num_particles=num_particles).differentiable_loss
 
     baseline_cll = 0.0
@@ -130,45 +132,3 @@ def generate_table(device, num_quadrant_inputs, pre_trained_baseline,
     df.iloc[0, 0] = baseline_cll / num_preds
     df.iloc[1, 0] = cvae_mc_cll / num_preds
     return df
-
-
-if __name__ == '__main__':
-    # Load models pre-trained models
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    pre_trained_baseline = BaselineNet(500, 500)
-    pre_trained_baseline.load_state_dict(
-        torch.load('../data/models/baseline_net_q1.pth',
-                   map_location=torch.device('cpu')))
-    pre_trained_baseline.eval()
-
-    pre_trained_cvae = CVAE(200, 500, 500, pre_trained_baseline)
-    pre_trained_cvae.load('../data/models/cvae_net_q1.pth', map_location=device)
-
-    # visualize(
-    #     device=device,
-    #     num_quadrant_inputs=2,
-    #     pre_trained_baseline=pre_trained_baseline,
-    #     pre_trained_cvae=pre_trained_cvae,
-    #     num_images=10,
-    #     num_samples=10
-    # )
-
-    df = generate_table(
-        device,
-        num_quadrant_inputs=1,
-        pre_trained_baseline=pre_trained_baseline,
-        pre_trained_cvae=pre_trained_cvae,
-        num_particles=10,
-        col_name='1 quadrant'
-    )
-    print(df)
-
-
-
-
-
-
-
-
-
