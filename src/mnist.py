@@ -90,3 +90,17 @@ def get_data(num_quadrant_inputs, batch_size):
         dataset_sizes[mode] = len(datasets[mode])
 
     return datasets, dataloaders, dataset_sizes
+
+
+def get_val_images(num_quadrant_inputs, num_images, shuffle):
+    datasets, _, dataset_sizes = get_data(
+        num_quadrant_inputs=num_quadrant_inputs,
+        batch_size=num_images
+    )
+    dataloader = DataLoader(datasets['val'], batch_size=num_images,
+                            shuffle=shuffle)
+
+    batch = next(iter(dataloader))
+    inputs = batch['input']
+    digits = batch['digit']
+    return inputs, digits

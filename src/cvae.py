@@ -1,11 +1,13 @@
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, Predictive
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+from mnist import get_val_images
 
 
 class Encoder(nn.Module):
@@ -142,11 +144,17 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
     early_stop_count = 0
     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
 
+    # to track evolution
+    val_inp, digits = get_val_images(num_quadrant_inputs=1,
+                                     num_images=30, shuffle=False)
+    val_inp = val_inp.to(device)
+    samples = []
+    losses = []
+
     for epoch in range(num_epochs):
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
             running_loss = 0.0
-            num_preds = 0
 
             # Iterate over data.
             bar = tqdm(dataloaders[phase],
@@ -156,16 +164,27 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
                 outputs = batch['output'].to(device)
 
                 if phase == 'train':
-                    loss = svi.step(inputs, outputs)
+                    loss = svi.step(inputs, outputs) / inputs.size(0)
                 else:
-                    loss = svi.evaluate_loss(inputs, outputs)
+                    loss = svi.evaluate_loss(inputs, outputs) / inputs.size(0)
 
                 # statistics
-                running_loss += loss / inputs.size(0)
-                num_preds += 1
+                running_loss += loss
                 if i % 10 == 0:
-                    bar.set_postfix(loss='{:.2f}'.format(running_loss / num_preds),
+                    bar.set_postfix(loss='{:.2f}'.format(loss),
                                     early_stop_count=early_stop_count)
+
+                # track evolution
+                if phase == 'train':
+                    df = pd.DataFrame(columns=['epoch', 'loss'])
+                    df.loc[0] = [epoch + float(i) / len(dataloaders[phase]), loss]
+                    losses.append(df)
+                    if i % 47 == 0:  # every 10% of training (469)
+                        dfs = predict_samples(
+                            val_inp, digits, cvae_net,
+                            epoch + float(i) / len(dataloaders[phase]),
+                        )
+                        samples.append(dfs)
 
             epoch_loss = running_loss / dataset_sizes[phase]
             # deep copy the model
@@ -182,4 +201,24 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
 
     # Save model weights
     cvae_net.load(model_path)
+
+    # record evolution
+    samples = pd.concat(samples, axis=0, ignore_index=True)
+    samples.to_csv('samples.csv', index=False)
+
+    losses = pd.concat(losses, axis=0, ignore_index=True)
+    losses.to_csv('losses.csv', index=False)
+
     return cvae_net
+
+
+def predict_samples(inputs, digits, pre_trained_cvae, epoch_frac):
+    predictive = Predictive(pre_trained_cvae.model,
+                            guide=pre_trained_cvae.guide,
+                            num_samples=1)
+    preds = predictive(inputs)
+    y_loc = preds['y'].squeeze().detach().cpu().numpy()
+    dfs = pd.DataFrame(data=y_loc)
+    dfs['digit'] = digits.numpy()
+    dfs['epoch'] = epoch_frac
+    return dfs

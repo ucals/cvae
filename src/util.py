@@ -3,12 +3,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
 from pyro.infer import Predictive, Trace_ELBO
+from sklearn.manifold import TSNE
 import torch
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
-from baseline import MaskedBCELoss
-from mnist import get_data
+from baseline import MaskedBCELoss, BaselineNet
+from mnist import get_data, get_val_images
+from cvae import CVAE
 
 
 def imshow(inp, image_path=None):
@@ -132,3 +134,55 @@ def generate_table(device, num_quadrant_inputs, pre_trained_baseline,
     df.iloc[0, 0] = baseline_cll / num_preds
     df.iloc[1, 0] = cvae_mc_cll / num_preds
     return df
+
+
+if __name__ == '__main__':
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    # Dataset
+    datasets, dataloaders, dataset_sizes = get_data(
+        num_quadrant_inputs=1,
+        batch_size=128
+    )
+    baseline_net = BaselineNet(500, 500)
+    baseline_net.load_state_dict(
+        torch.load('/Users/carlossouza/Downloads/baseline_net_q1.pth',
+                   map_location='cpu'))
+    baseline_net.eval()
+
+    cvae_net = CVAE(200, 500, 500, baseline_net)
+    cvae_net.load_state_dict(
+        torch.load('/Users/carlossouza/Downloads/cvae_net_q1.pth',
+                   map_location='cpu'))
+    cvae_net.eval()
+
+    visualize(
+        device=device,
+        num_quadrant_inputs=1,
+        pre_trained_baseline=baseline_net,
+        pre_trained_cvae=cvae_net,
+        num_images=10,
+        num_samples=10
+    )
+
+    # df = generate_table(
+    #     device=device,
+    #     num_quadrant_inputs=1,
+    #     pre_trained_baseline=baseline_net,
+    #     pre_trained_cvae=cvae_net,
+    #     num_particles=10,
+    #     col_name='{} quadrant'.format(1)
+    # )
+    # print(df)
+
+
+
+
+
+
+
+
+
+
+
+
