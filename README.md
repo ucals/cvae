@@ -44,6 +44,10 @@ We achieved similar results to the ones achieved by the authors in the paper. We
 
 See the full code on [Github](https://github.com/ucals/cvae).
 
+## IMPORTANT
+There are some issue reports when trying to run the code with Pyro versions different than the one in `requirements.txt`.
+So, to make sure the code works, the recommended way is to create a clean virtual environment (conda or virtualenv), and running `pip install -r requirements.txt` in this new environment.
+
 ## References
 
 [1] `Learning Structured Output Representation using Deep Conditional Generative Models`,<br/>&nbsp;&nbsp;&nbsp;&nbsp;
