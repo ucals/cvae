@@ -1,0 +1,6 @@
+pyro-ppl==1.4.0
+pandas==1.5.3
+torch==1.13.1
+torchvision==0.14.1
+matplotlib==3.7.1
+scikit-learn==1.2.2
